@@ -2,6 +2,7 @@ const userModel = require("../modules/userModel");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const transport = require("../config/nodemailer");
+const { json } = require("express");
 
 // register controller
 const register = async (req, res) => {
@@ -158,7 +159,7 @@ const logout = async (req, res) => {
 // send verification otp to the user's email
 const sendVerifyOtp = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const userId = req.user.id;
 
     const user = await userModel.findById({ _id: userId });
 
@@ -241,7 +242,8 @@ const sendVerifyOtp = async (req, res) => {
 };
 
 const verifyEmail = async (req, res) => {
-  const { userId, otp } = req.body;
+  const {  otp } = req.body;
+  const userId = req.user.id;
 
   if (!userId || !otp) {
     return res.json({
@@ -253,15 +255,15 @@ const verifyEmail = async (req, res) => {
   try {
     const user = await userModel.findById(userId);
 
-    if(!user){
-       return res.json({
-      success: false,
-      message: "user not Found",
-    });
+    if (!user) {
+      return res.json({
+        success: false,
+        message: "user not Found",
+      });
     }
 
     // check otp
-    if (user.verifyOtp === '' || user.verifyOtp !== otp) {
+    if (user.verifyOtp === "" || user.verifyOtp !== otp) {
       return res.json({
         success: false,
         message: "Invalid OTP",
@@ -279,7 +281,7 @@ const verifyEmail = async (req, res) => {
     }
 
     user.isAccountVefified = true;
-    user.verifyOtp = '';
+    user.verifyOtp = "";
     user.verifyOtpExpireAt = 0;
     await user.save();
 
@@ -295,4 +297,178 @@ const verifyEmail = async (req, res) => {
   }
 };
 
-module.exports = { register, logout, login, sendVerifyOtp, verifyEmail };
+const isauthenticated = async (req, res) => {
+  try {
+    return res.json({
+      success: true,
+    });
+  } catch (err) {
+    return res.json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// send password reset otp
+const sendresetotp = async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.json({
+      success: false,
+      message: "email is required",
+    });
+  }
+
+  try {
+    // existing user
+    const user = await userModel.findOne({ email });
+
+    if (!user) {
+      return res.json({
+        success: false,
+        message: "user not found",
+      });
+    }
+
+      // otp genereate
+      const otp = String(Math.floor(10000 + Math.random() * 900000));
+      console.log(otp);
+
+      user.resetOtp = otp;
+      user.resetOtpExpireAt = Date.now() + 5 * 60 * 10000;
+      await user.save();
+
+      const mailOptions = {
+        from: process.env.APP_USER,
+        to: user.email,
+        subject: "Password Reset OTP",
+        text: "Here is your OTP to reset your password.",
+        html: `
+  <div style="font-family: Arial, sans-serif; background-color: #f4f6f8; padding: 20px;">
+    <div style="max-width: 400px; background-color: #ffffff; margin: 0 auto; border-radius: 8px; box-shadow: 0 2px 6px rgba(0,0,0,0.1); overflow: hidden;">
+      
+      <div style="background-color: #1d72b8; color: #ffffff; text-align: center; padding: 15px;">
+        <h3 style="margin: 0;">SecureAuth</h3>
+      </div>
+
+      <div style="padding: 25px; text-align: center; color: #333;">
+        <p style="font-size: 15px; margin-bottom: 10px;">We received a request to reset your password.</p>
+        <p style="font-size: 14px;">Use this OTP to proceed:</p>
+
+        <div style="font-size: 28px; letter-spacing: 4px; font-weight: bold; color: #1d72b8; margin: 15px 0;">
+          ${otp}
+        </div>
+
+        <p style="font-size: 13px; color: #666;">
+          The OTP expires in <strong>5 minutes</strong>.
+        </p>
+      </div>
+
+      <div style="background-color: #f1f1f1; text-align: center; padding: 10px; font-size: 12px; color: #999;">
+        © 2025 SecureAuth
+      </div>
+    </div>
+  </div>
+  `,
+      };
+
+      try {
+        await transport.sendMail(mailOptions);
+        console.log("Password reset email sent successfully");
+
+        return res.json({
+          success: true,
+          message: "Reset OTP sent",
+        });
+      } 
+      catch (error) {
+        console.error("Error sending reset OTP:", error);
+        return res.json({
+          success: false,
+          message: "Error while sending reset OTP",
+        });
+      }
+    }
+   catch (error) {
+    return res.json({
+      success: false,
+      message: "error while creating",
+    });
+  }
+};
+
+const resetpassword = async (req, res) => {
+  const { email, otp, newpassword } = req.body;
+
+  if (!email || !otp || !newpassword) {
+    return res.json({
+      success: false,
+      message: "all field are required",
+    });
+  }
+
+  try {
+    const user = await userModel.findOne({ email });
+   
+    if (!user) {
+      return res.json({
+        success: false,
+        message: "user not found",
+      });
+    }
+
+  console.log(otp);
+    // check otp
+    if (user.resetOtp === "" || user.resetOtp !== otp) {
+      return res.json({
+        success: false,
+        message: "otp does not match",
+      });
+    }
+
+    console.log(otp);
+      
+    // check expiry
+    const currenttime = Date.now();
+    if (currenttime >= user.resetOtpExpireAt) {
+      return res.json({
+        success: false,
+        message: "otp expired please try again later",
+      });
+    }
+
+    // password hashing
+    const salt =await bcrypt.genSalt(10);
+    
+    const hash =await bcrypt.hash(newpassword, salt);
+    console.log(hash);
+
+    user.password = hash;
+    user.resetOtp = "";
+    user.resetOtpExpireAt = 0;
+    await user.save();
+
+    return res.json({
+      success: true,
+      message: "password reset success",
+    });
+  } catch (err) {
+    return res.json({
+      success: false,
+      message: "error while permoring",
+    });
+  }
+};
+
+module.exports = {
+  register,
+  logout,
+  login,
+  sendVerifyOtp,
+  verifyEmail,
+  isauthenticated,
+  sendresetotp,
+  resetpassword,
+};
