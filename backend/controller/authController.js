@@ -2,10 +2,11 @@ const userModel = require("../modules/userModel");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const transport = require("../config/nodemailer");
-const { json } = require("express");
+
 
 // register controller
 const register = async (req, res) => {
+ 
   const { name, email, password } = req.body;
 
   // basic validation
@@ -68,7 +69,6 @@ const register = async (req, res) => {
     return res.json({
       success: true,
       message: "Email sent successfully",
-      // data: createuser, // Uncomment when user creation is enabled
     });
   } catch (err) {
     return res.json({
@@ -77,6 +77,7 @@ const register = async (req, res) => {
     });
   }
 };
+
 
 // log in controller
 const login = async (req, res) => {
@@ -97,7 +98,7 @@ const login = async (req, res) => {
     if (!existinguser) {
       return res.json({
         success: false,
-        message: "something went wrong",
+        message: "Invalid Email or password",
       });
     }
 
@@ -334,7 +335,7 @@ const sendresetotp = async (req, res) => {
 
       // otp genereate
       const otp = String(Math.floor(10000 + Math.random() * 900000));
-      console.log(otp);
+     
 
       user.resetOtp = otp;
       user.resetOtpExpireAt = Date.now() + 5 * 60 * 10000;
@@ -394,7 +395,7 @@ const sendresetotp = async (req, res) => {
    catch (error) {
     return res.json({
       success: false,
-      message: "error while creating",
+      message: "error while sending reset otp",
     });
   }
 };
@@ -419,7 +420,7 @@ const resetpassword = async (req, res) => {
       });
     }
 
-  console.log(otp);
+
     // check otp
     if (user.resetOtp === "" || user.resetOtp !== otp) {
       return res.json({
@@ -428,8 +429,7 @@ const resetpassword = async (req, res) => {
       });
     }
 
-    console.log(otp);
-      
+   
     // check expiry
     const currenttime = Date.now();
     if (currenttime >= user.resetOtpExpireAt) {
@@ -443,7 +443,7 @@ const resetpassword = async (req, res) => {
     const salt =await bcrypt.genSalt(10);
     
     const hash =await bcrypt.hash(newpassword, salt);
-    console.log(hash);
+  
 
     user.password = hash;
     user.resetOtp = "";

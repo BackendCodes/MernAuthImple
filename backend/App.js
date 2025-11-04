@@ -18,7 +18,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // third party middlewares
-app.use(cors({ credentials: true }));
+app.use(cors({origin: "http://localhost:5173", credentials: true }));
 app.use(cookieParser());
 
 // configuring the dotenv to read the data from env files

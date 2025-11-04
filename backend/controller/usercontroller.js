@@ -6,7 +6,7 @@ const getuserdata = async (req, res) => {
    
 
     const user = await userModel.findById(userId).select("-password");
-    console.log(user);
+    
     if (!user) {
       return res.json({
         success: false,
